@@ -1,0 +1,5 @@
+# Built by start.sh from bridge/callbridge.swift
+bridge/callbridge
+.DS_Store
+__pycache__/
+*.pyc

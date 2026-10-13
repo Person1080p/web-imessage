@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Messages">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Messages</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icon-180.png" type="image/png" sizes="180x180">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="stylesheet" href="/style.css">
+<script>
+  try { var t = localStorage.getItem('webim.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  // Animation speed is applied before first paint so the sign-in card respects it.
+  (function () {
+    var a = null;
+    try { a = JSON.parse(localStorage.getItem('webim.anim')); } catch (e) {}
+    if (!a) a = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'normal';
+    var speed = { off: 0, slow: 1.75, normal: 1, fast: 0.55 }[a];
+    if (speed === undefined) speed = 1;
+    document.documentElement.style.setProperty('--speed', speed);
+    if (!speed) document.documentElement.dataset.anim = 'off';
+  })();
+</script>
+</head>
+<body>
+
+<section id="login" class="screen" hidden>
+  <form class="card glass" id="loginForm">
+    <img class="app-icon" src="/icon.svg" alt="" width="76" height="76">
+    <h1>Messages</h1>
+    <p class="muted">Enter the password shown in the Mac's terminal when the server started.</p>
+    <input id="password" type="password" autocomplete="current-password" placeholder="Password" required>
+    <p class="error" id="loginError" role="alert"></p>
+    <button class="btn primary" type="submit">Sign In</button>
+  </form>
+</section>
+
+<section id="noaccess" class="screen" hidden>
+  <div class="card glass wide">
+    <img class="app-icon" src="/icon.svg" alt="" width="64" height="64">
+    <h1>Can't read Messages yet</h1>
+    <p>The server is running but macOS is blocking access to the Messages database. On the Mac:</p>
+    <ol>
+      <li>Open <b>System Settings → Privacy &amp; Security → Full Disk Access</b>.</li>
+      <li>Turn on the app that runs the server (usually <b>Terminal</b>, or <b>iTerm</b> / <b>Visual Studio Code</b>).</li>
+      <li>Quit and reopen that app, then start the server again.</li>
+    </ol>
+    <p class="muted" id="noaccessDetail"></p>
+    <button class="btn primary" id="retryAccess">Try Again</button>
+  </div>
+</section>
+
+<div id="app" class="app" hidden>
+  <aside class="sidebar glass" aria-label="Conversations">
+    <header class="side-head">
+      <button class="circle glass" id="menuBtn" aria-label="Settings" aria-haspopup="menu">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg>
+      </button>
+      <span class="conn" id="connDot" title="Live updates connected"></span>
+      <span class="spacer"></span>
+      <button class="circle glass" id="newBtn" aria-label="New message" title="New message">
+        <svg viewBox="0 0 24 24"><path d="M18.9 2.6a1.9 1.9 0 0 1 2.7 2.7l-8.9 8.9-3.6.9.9-3.6 8.9-8.9z"/><path d="M5.5 4.5H12v1.8H5.8a1 1 0 0 0-1 1v11.4a1 1 0 0 0 1 1h11.4a1 1 0 0 0 1-1V12h1.8v6.9a2.6 2.6 0 0 1-2.6 2.6H5.5a2.6 2.6 0 0 1-2.6-2.6V7.1a2.6 2.6 0 0 1 2.6-2.6z"/></svg>
+      </button>
+    </header>
+    <h1 class="big-title">Messages</h1>
+    <div class="side-tools">
+      <label class="search">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search">
+      </label>
+    </div>
+    <div id="convList" class="conv-list" role="list"></div>
+  </aside>
+
+  <main class="thread" id="thread">
+    <div class="empty-state" id="emptyState">
+      <img class="app-icon" src="/icon.svg" alt="" width="64" height="64">
+      <p>No Conversation Selected</p>
+    </div>
+
+    <div class="scroller" id="scroller">
+      <div class="msgs">
+        <div class="older" id="older"></div>
+        <div id="msgList"></div>
+      </div>
+    </div>
+    <div class="edge edge-top" aria-hidden="true"></div>
+    <div class="edge edge-bottom" aria-hidden="true"></div>
+
+    <header class="thread-head" id="threadHead" hidden>
+      <button class="circle glass back" id="backBtn" aria-label="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="head-main" id="headMain" aria-label="Contact details">
+        <span id="headAvatar"></span>
+        <span class="head-name glass"><span id="headTitle"></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="head-sub" id="headSub"></span>
+      </button>
+      <div class="head-actions">
+        <button class="circle glass" id="callBtn" aria-label="Call" title="Call" hidden>
+          <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>
+        </button>
+        <button class="circle glass" id="infoBtn" aria-label="Details">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M11.1 10.4h1.8v6.4h-1.8z"/><circle cx="12" cy="7.8" r="1.2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="to-bar glass" id="toBar" hidden>
+      <label for="toInput">To:</label>
+      <input id="toInput" type="text" placeholder="Name, phone number, or email" autocomplete="off" enterkeyhint="go">
+      <div class="suggest glass" id="toSuggest" role="listbox"></div>
+    </div>
+
+    <button class="jump circle glass" id="jumpBtn" hidden aria-label="Jump to latest">
+      <svg viewBox="0 0 24 24"><path d="M12 19.5l-6.2-6.2 1.5-1.5 3.6 3.6V4.5h2.2v10.9l3.6-3.6 1.5 1.5z"/></svg>
+    </button>
+
+    <footer class="composer" id="composer" hidden>
+      <div class="tray" id="tray"></div>
+      <div class="composer-row">
+        <button class="circle glass plus-btn" id="attachBtn" aria-label="Attach files" title="Attach files">
+          <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+        </button>
+        <input type="file" id="fileInput" multiple hidden>
+        <div class="input-wrap glass">
+          <textarea id="input" rows="1" placeholder="iMessage" aria-label="Message" enterkeyhint="send"></textarea>
+          <button class="send-btn" id="sendBtn" aria-label="Send" disabled>
+            <svg viewBox="0 0 24 24"><path d="M12 4.5l6.2 6.2-1.5 1.5-3.6-3.6V19.5h-2.2V8.6l-3.6 3.6-1.5-1.5z"/></svg>
+          </button>
+        </div>
+      </div>
+    </footer>
+
+    <aside class="details glass" id="details" hidden aria-label="Details">
+      <div class="det-bar">
+        <button class="circle glass" id="detBack" aria-label="Back" hidden>
+          <svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="spacer"></span>
+        <button class="circle glass" id="detClose" aria-label="Close details">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="det-body" id="detBody"></div>
+    </aside>
+
+    <div class="drop-hint" id="dropHint">Drop files to send</div>
+  </main>
+</div>
+
+<div class="menu glass" id="menu" role="menu" hidden>
+  <div class="menu-label">Appearance</div>
+  <div class="seg" id="themeSeg">
+    <button data-theme="system">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button>
+  </div>
+  <div class="menu-label">Animations</div>
+  <div class="seg" id="animSeg">
+    <button data-anim="off">Off</button><button data-anim="slow">Slow</button><button data-anim="normal">Normal</button><button data-anim="fast">Fast</button>
+  </div>
+  <label class="menu-row"><input type="checkbox" id="soundToggle"> Sound for new messages</label>
+  <label class="menu-row"><input type="checkbox" id="notifyToggle"> Desktop notifications</label>
+  <p class="menu-note" id="notifyNote" hidden></p>
+  <button class="menu-row btn-row" id="logoutBtn">Sign Out</button>
+</div>
+
+<div class="overlay" id="lightbox" hidden>
+  <div class="lb-bar">
+    <a class="circle glass dark" id="lbDownload" aria-label="Download" download>
+      <svg viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4.5-4.5M12 14l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    <button class="circle glass dark" id="lbClose" aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="lb-body" id="lbBody"></div>
+</div>
+
+<div class="call-banner glass" id="callBanner" hidden role="alertdialog" aria-labelledby="bannerName" aria-describedby="bannerDetail">
+  <span id="bannerAvatar"></span>
+  <div class="cb-text"><b id="bannerName"></b><small id="bannerDetail"></small></div>
+  <button class="cb-btn decline" id="bannerDecline" aria-label="Decline">
+    <svg viewBox="0 0 24 24"><path transform="rotate(135 12 12)" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>
+  </button>
+  <button class="cb-btn accept" id="bannerAccept" aria-label="Accept">
+    <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>
+  </button>
+</div>
+
+<div class="call-hud glass" id="callHud" hidden role="dialog" aria-label="Call">
+  <div class="call-video" id="callVideo" hidden><img id="callVideoImg" alt="FaceTime video from the Mac"></div>
+  <div class="call-hero">
+    <span id="callAvatar"></span>
+    <div class="call-text"><b id="callName"></b><span id="callStatus" aria-live="polite"></span></div>
+    <span class="call-level" id="callLevel" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+  </div>
+  <div class="call-controls">
+    <button class="call-btn" id="callMute" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><path class="slash" d="M4 3l17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>mute</span>
+    </button>
+    <button class="call-btn" id="callVideoBtn" aria-pressed="true" hidden>
+      <svg viewBox="0 0 24 24"><path d="M15 8.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.5l5.3 3.4c.7.4 1.7-.1 1.7-.9V6c0-.8-1-1.3-1.7-.9L15 8.5z"/></svg>
+      <span>video</span>
+    </button>
+    <button class="call-btn end" id="callEnd">
+      <svg viewBox="0 0 24 24"><path transform="rotate(135 12 12)" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>
+      <span>end</span>
+    </button>
+  </div>
+</div>
+
+<div class="overlay dim" id="callSetup" hidden>
+  <div class="setup-sheet glass" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <header><h2 id="setupTitle">Set Up Calls</h2>
+      <button class="circle glass" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </header>
+    <div id="setupBody"></div>
+  </div>
+</div>
+
+<div class="menu glass chooser" id="callChooser" role="menu" hidden></div>
+
+<div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+<script src="/calls.js"></script>
+</body>
+</html>
