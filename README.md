@@ -1,7 +1,7 @@
 # web-imessage
 
 Read and reply to iMessages / texts from any browser (Windows PC, phone, tablet) using this Mac as the bridge.
-Works like Google Messages for web: conversation list, live updates, photos, voice messages, reactions, search, new chats.
+Works like Google Messages for web: conversation list, live updates, photos, voice messages, reactions, search, new chats, and phone calls.
 
 No dependencies: it runs on the built-in `python3`.
 
